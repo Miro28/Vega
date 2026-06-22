@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VEGA AR STAR MAP</title>
+    <script src="https://cdn.jsdelivr.net/npm/astronomy-engine/astronomy.browser.min.js"></script>
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"
+          }
+        }
+    </script>
+</head>
+
+<body>
+        <button id="findBtn">Find My Location</button>
+        <p id="location"></p>
+        <p id="SunOutput"></p>
+        <p id="MoonOutput"></p>
+        <p id="StarOutput"></p>
+    
+        <script type="module" src="script.js"></script>
+</body>
+
+</html>
