@@ -267,9 +267,13 @@ async function startCamera() {
     document.body.appendChild(video);
   
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }  // rear camera
-      });
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: 'environment',
+              width:  { ideal: 1920 },
+              height: { ideal: 1080 }
+            }
+          });
       video.srcObject = stream;
       await video.play();
     } catch (err) {
@@ -314,27 +318,19 @@ function calibrateOnMoon() {
     const time = new Date();
     const equ = Astronomy.Equator(Astronomy.Body.Moon, time, currentObserver, true, true);
     const hor = Astronomy.Horizon(time, currentObserver, equ.ra, equ.dec, 'normal');
-    const moonAz = hor.azimuth; // true bearing of the Moon (0=N, 90=E)
+    const moonAz = hor.azimuth;
   
-    // where is the camera actually pointing right now (in world space)?
+    // direction the camera (crosshair) is pointing, in world space
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
-  
-    // convert that direction to a compass azimuth, matching altAzToVector's mapping:
-    // x = cos(alt)*sin(az), z = -cos(alt)*cos(az)  ->  az = atan2(x, -z)
     let camAz = Math.atan2(dir.x, -dir.z) * 180 / Math.PI;
     if (camAz < 0) camAz += 360;
   
-    // the app currently shows the Moon at camAz; it should be at moonAz.
-    // shift the heading offset by the difference.
+    // make the app agree that the crosshair direction = the Moon
     let diff = camAz - moonAz;
-    // normalize to -180..180 so it takes the short way around
     while (diff > 180) diff -= 360;
     while (diff < -180) diff += 360;
-  
     headingOffset += diff;
-  
-    alert(`Calibrated. cam ${camAz.toFixed(0)}, moon ${moonAz.toFixed(0)}, offset now ${headingOffset.toFixed(0)}`);
   }
     
 document.getElementById('findBtn').addEventListener('click', FindLocation);
