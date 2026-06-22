@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 let headingOffset = 0;  // correction applied to compass heading
 let currentObserver = null;  // so calibrate can access location
 let arActive = false;
+let rawAlpha = 0, rawBeta = 0, rawGamma = 0;
 let deviceAngles = { alpha: 0, beta: 0, gamma: 0 };
 const zee = new THREE.Vector3(0, 0, 1);
 const q0 = new THREE.Quaternion();
@@ -125,22 +126,28 @@ function showStars(latitude, longitude) {
         }
         renderer.render(scene, camera);
     }
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
     animate();
 }
 
 
 
 function setCameraFromDevice() {
-  const deg2rad = Math.PI / 180;
-  const alpha = (deviceAngles.alpha) * deg2rad; // z
-  const beta  = (deviceAngles.beta)  * deg2rad; // x
-  const gamma = (deviceAngles.gamma) * deg2rad; // y
-  const orient = (screen.orientation?.angle || 0) * deg2rad; // screen rotation
+    const deg2rad = Math.PI / 180;
+    // Apply the offset here during rendering instead of on sensor tick
+    const alpha = (rawAlpha - headingOffset) * deg2rad; 
+    const beta  = rawBeta  * deg2rad; 
+    const gamma = rawGamma * deg2rad; 
+    const orient = (screen.orientation?.angle || 0) * deg2rad; 
 
-  tmpEuler.set(beta, alpha, -gamma, 'YXZ');
-  camera.quaternion.setFromEuler(tmpEuler);
-  camera.quaternion.multiply(q1);                          // camera looks out the back
-  camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient)); // adjust for screen rotation
+    tmpEuler.set(beta, alpha, -gamma, 'YXZ');
+    camera.quaternion.setFromEuler(tmpEuler);
+    camera.quaternion.multiply(q1);                          
+    camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient)); 
 }
 
 function plotStars(stars, observer, time) {
@@ -258,18 +265,29 @@ function magToSize(mag) {
   async function startCamera() {
     const video = document.createElement('video');
     video.setAttribute('playsinline', '');
+    
+    // Let CSS handle the aspect ratio flawlessly
     video.style.position = 'fixed';
-    video.style.top = '50%';
-    video.style.left = '50%';
-    video.style.transform = 'translate(-50%, -50%)';
-    video.style.maxWidth = '100vw';
-    video.style.maxHeight = '100vh';
+    video.style.top = '0';
+    video.style.left = '0';
+    video.style.width = '100vw';
+    video.style.height = '100vh';
+    video.style.objectFit = 'cover'; 
     video.style.zIndex = '-2';
     document.body.appendChild(video);
 
+    // Request Portrait vs Landscape resolution dynamically to prevent extreme cropping
+    const isPortrait = window.innerHeight > window.innerWidth;
+    const idealWidth = isPortrait ? 1080 : 1920;
+    const idealHeight = isPortrait ? 1920 : 1080;
+
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+            video: { 
+                facingMode: 'environment', 
+                width: { ideal: idealWidth }, 
+                height: { ideal: idealHeight } 
+            }
         });
         video.srcObject = stream;
         await video.play();
@@ -298,42 +316,43 @@ function startAR() {
 }
 
 function onOrientation(event) {
-  if (event.alpha === null) return;
-  deviceAngles.alpha = event.alpha - headingOffset;
-  deviceAngles.beta  = event.beta;
-  deviceAngles.gamma = event.gamma;
-  arActive = true;
-  // keep the readout for now while testing
-  document.getElementById('arReadout').textContent =
-    `a${event.alpha.toFixed(0)} b${event.beta.toFixed(0)} g${event.gamma.toFixed(0)}`;
+    if (event.alpha === null) return;
+    rawAlpha = event.alpha;
+    rawBeta = event.beta;
+    rawGamma = event.gamma;
+    arActive = true;
+    
+    // Keeping your readout for testing
+    document.getElementById('arReadout').textContent =
+        `a${event.alpha.toFixed(0)} b${event.beta.toFixed(0)} g${event.gamma.toFixed(0)}`;
 }
 
 function calibrateOnMoon() {
     if (!currentObserver) { alert('Find location first'); return; }
   
-    // make sure the camera reflects the CURRENT device orientation right now
+    // Force an immediate camera update to get an accurate baseline
     setCameraFromDevice();
   
-    // true position of the Moon
     const time = new Date();
     const equ = Astronomy.Equator(Astronomy.Body.Moon, time, currentObserver, true, true);
     const hor = Astronomy.Horizon(time, currentObserver, equ.ra, equ.dec, 'normal');
     const moonAz = hor.azimuth;
   
-    // where the camera (crosshair / screen center) actually points, in world space
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
     let crossAz = Math.atan2(dir.x, -dir.z) * 180 / Math.PI;
     if (crossAz < 0) crossAz += 360;
   
-    // we want the crosshair to point where the Moon is.
-    // crossAz currently includes the effect of headingOffset (via deviceAngles.alpha).
-    // shift headingOffset by the gap, taking the short way around.
     let diff = crossAz - moonAz;
     while (diff > 180) diff -= 360;
     while (diff < -180) diff += 360;
-    headingOffset += diff;
-  }
+  
+    // THE FIX: Subtract the difference to account for inverted rotation
+    headingOffset -= diff;
+    
+    // Snap camera to the new position instantly
+    setCameraFromDevice();
+}
     
 document.getElementById('findBtn').addEventListener('click', FindLocation);
 document.getElementById('arBtn').addEventListener('click', startAR);
