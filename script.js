@@ -288,18 +288,29 @@ function calibrateOnMoon() {
     if (!currentObserver) { alert('Find location first'); return; }
   
     const time = new Date();
-    // where the Moon really is:
     const equ = Astronomy.Equator(Astronomy.Body.Moon, time, currentObserver, true, true);
     const hor = Astronomy.Horizon(time, currentObserver, equ.ra, equ.dec, 'normal');
-    const moonAzimuth = hor.azimuth;   // true compass bearing of the Moon
+    const moonAz = hor.azimuth; // true bearing of the Moon (0=N, 90=E)
   
-    // what the phone currently thinks it's pointing at (raw alpha, before offset):
-    const rawHeading = deviceAngles.alpha + headingOffset; // undo current offset to get raw
+    // where is the camera actually pointing right now (in world space)?
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
   
-    // the offset is the difference: how far the phone's heading is from reality
-    headingOffset = rawHeading - moonAzimuth;
+    // convert that direction to a compass azimuth, matching altAzToVector's mapping:
+    // x = cos(alt)*sin(az), z = -cos(alt)*cos(az)  ->  az = atan2(x, -z)
+    let camAz = Math.atan2(dir.x, -dir.z) * 180 / Math.PI;
+    if (camAz < 0) camAz += 360;
   
-    alert(`Calibrated. Moon az ${moonAzimuth.toFixed(0)}, offset ${headingOffset.toFixed(0)}`);
+    // the app currently shows the Moon at camAz; it should be at moonAz.
+    // shift the heading offset by the difference.
+    let diff = camAz - moonAz;
+    // normalize to -180..180 so it takes the short way around
+    while (diff > 180) diff -= 360;
+    while (diff < -180) diff += 360;
+  
+    headingOffset += diff;
+  
+    alert(`Calibrated. cam ${camAz.toFixed(0)}, moon ${moonAz.toFixed(0)}, offset now ${headingOffset.toFixed(0)}`);
   }
     
 document.getElementById('findBtn').addEventListener('click', FindLocation);
