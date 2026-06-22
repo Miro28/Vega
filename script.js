@@ -263,10 +263,16 @@ function magToSize(mag) {
     return Math.max(0.15, Math.min(size, 4)); // clamp so nothing's absurd
   }
   async function startCamera() {
+    // SECURITY CHECK: Ensure the browser allows camera access (Requires HTTPS or localhost)
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("Camera API blocked. Are you testing on HTTP? Mobile browsers require HTTPS to open the camera.");
+        return; 
+    }
+
     const video = document.createElement('video');
     video.setAttribute('playsinline', '');
     video.setAttribute('autoplay', '');
-    video.setAttribute('muted', ''); // CRITICAL: Mobile browsers block unmuted camera autoplay
+    video.setAttribute('muted', ''); 
     video.muted = true;
     
     video.style.position = 'fixed';
@@ -275,7 +281,7 @@ function magToSize(mag) {
     video.style.width = '100vw';
     video.style.height = '100vh';
     video.style.objectFit = 'cover'; 
-    video.style.zIndex = '1'; // Sits above the black background, below the canvas
+    video.style.zIndex = '1'; 
     document.body.appendChild(video);
 
     const isPortrait = window.innerHeight > window.innerWidth;
@@ -291,9 +297,12 @@ function magToSize(mag) {
             }
         });
         video.srcObject = stream;
-        await video.play();
+        
+        // THE FIX: Do NOT `await` this. Let it play in the background so it doesn't freeze the initialization.
+        video.play().catch(e => console.warn("Video play warning:", e));
+        
     } catch (err) {
-        alert('Camera error: ' + err);
+        alert('Camera error: ' + err.message);
     }
 }
 function startAR() {
@@ -353,47 +362,39 @@ function calibrateOnMoon() {
     setCameraFromDevice();
 }
     
-// --- NEW INITIALIZATION LOGIC ---
-
 async function initializeApp() {
     const startBtn = document.getElementById('startAppBtn');
     startBtn.textContent = "Connecting Sensors...";
     startBtn.style.pointerEvents = "none"; 
 
-    // 1. Request Fullscreen automatically
-    if (document.documentElement.requestFullscreen) {
-        try {
-            await document.documentElement.requestFullscreen();
-        } catch (err) {
-            console.warn("Fullscreen request denied or not supported by this browser.");
-        }
-    }
-
-    // 2. Kick off Location request
-    FindLocation();
-
-    // 3. Request Camera and Orientation permissions
-    await startCamera();
-    
+    // 1. Request Orientation FIRST (iOS requires this to happen instantly after the tap)
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
             const state = await DeviceOrientationEvent.requestPermission();
-            if (state === 'granted') {
-                window.addEventListener('deviceorientation', onOrientation);
-                transitionToAR();
-            } else {
+            if (state !== 'granted') {
                 alert('Orientation permission denied. App cannot function.');
                 startBtn.textContent = "Permission Denied";
+                return; // Stop execution
             }
         } catch (err) {
-            alert('Orientation error: ' + err);
-            startBtn.textContent = "Error";
+            console.warn("Orientation request error:", err);
         }
-    } else {
-        // Android / Non-iOS path
-        window.addEventListener('deviceorientation', onOrientation);
-        transitionToAR();
     }
+
+    // 2. Request Fullscreen (Do NOT await this, it can stall the thread)
+    if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(e => console.warn("Fullscreen blocked by browser"));
+    }
+
+    // 3. Kick off Location request (Runs in background)
+    FindLocation();
+
+    // 4. Request Camera safely
+    await startCamera();
+    
+    // 5. If we survived the gauntlet, attach listeners and launch the AR view!
+    window.addEventListener('deviceorientation', onOrientation);
+    transitionToAR();
 }
 
 // Modify your existing onOrientation function slightly to call updateHUD:
