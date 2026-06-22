@@ -106,7 +106,8 @@ function startScene(){
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     renderer = new THREE.WebGLRenderer();
     const controls = new OrbitControls(camera, renderer.domElement);
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer = new THREE.WebGLRenderer({ alpha: true });
+    renderer.setClearColor(0x000000, 0); // transparent background
     document.body.appendChild(renderer.domElement);
     camera.position.set(0, 0, 0.1);   // basically at center
     controls.target.set(0, 0, 0);     // look toward center
@@ -253,8 +254,31 @@ function magToSize(mag) {
     const size = 1.5 * Math.pow(2.512, (1 - mag) * 0.4);
     return Math.max(0.15, Math.min(size, 4)); // clamp so nothing's absurd
   }
+async function startCamera() {
+    const video = document.createElement('video');
+    video.setAttribute('playsinline', '');  // needed for iOS/mobile
+    video.style.position = 'fixed';
+    video.style.top = '0';
+    video.style.left = '0';
+    video.style.width = '100vw';
+    video.style.height = '100vh';
+    video.style.objectFit = 'cover';
+    video.style.zIndex = '-2';  // behind the canvas (canvas is -1)
+    document.body.appendChild(video);
+  
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }  // rear camera
+      });
+      video.srcObject = stream;
+      await video.play();
+    } catch (err) {
+      alert('Camera error: ' + err);
+    }
+  }
 
 function startAR() {
+    startCamera();
     alert('Start AR running');   // proves the button fired
     if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function') {
