@@ -47,7 +47,6 @@ function FindLocation() {
         }
     }
 }
-document.getElementById('findBtn').addEventListener('click', FindLocation);
 
 function showSun(latitude, longitude) {
     const observer = new Astronomy.Observer(latitude, longitude, 0);
@@ -252,13 +251,9 @@ function onOrientation(event) {
       `#${orientationCount}  alpha ${a?.toFixed(1)}  beta ${b?.toFixed(1)}  gamma ${g?.toFixed(1)}`;
 }
     
-window.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('arBtn').addEventListener('click', startAR);
-});
-
-
-
+document.getElementById('findBtn').addEventListener('click', FindLocation);
+document.getElementById('arBtn').addEventListener('click', startAR);
 
 loadStars();
 loadConstellations();
-startScene();   
+startScene();
