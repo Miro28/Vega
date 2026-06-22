@@ -245,9 +245,9 @@ function startAR() {
   }
   
   function onOrientation(event) {
-    // alpha = compass heading (0-360), beta = front-back tilt, gamma = left-right tilt
     const a = event.alpha, b = event.beta, g = event.gamma;
-    console.log('alpha', a?.toFixed(1), 'beta', b?.toFixed(1), 'gamma', g?.toFixed(1));
+    document.getElementById('arReadout').textContent =
+      `alpha ${a?.toFixed(1)}  beta ${b?.toFixed(1)}  gamma ${g?.toFixed(1)}`;
   }
   document.getElementById('arBtn').addEventListener('click', startAR);
 
