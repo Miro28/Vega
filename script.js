@@ -14,19 +14,18 @@ function FindLocation() {
 
     function showPosition(position) {
         function clearSky() {
-            // remove everything except lights/camera helpers; for now remove all meshes
             for (let i = scene.children.length - 1; i >= 0; i--) {
               const obj = scene.children[i];
-              if (obj.isMesh) scene.remove(obj);
+              if (obj.isMesh || obj.isLine) scene.remove(obj);
             }
           }
         const latitude = position.coords.latitude;
         const longitude = position.coords.longitude;
-         // build these HERE, then pass them in
         const observer = new Astronomy.Observer(latitude, longitude, 0);
         const time = new Date();
         clearSky();
         plotStars(stars, observer, time);
+        drawConstellations(observer, time);
         plotBody(Astronomy.Body.Sun,  0xffdd00, 6, observer, time);  // yellow, big
         plotBody(Astronomy.Body.Moon, 0x636363, 5, observer, time);  // grey, big
     }
@@ -132,6 +131,27 @@ function plotStars(stars, observer, time) {
     console.log("stars plotted:", count, "scene children:", scene.children.length);
   }
 
+  function drawConstellations(observer, time) {
+    const material = new THREE.LineBasicMaterial({ color: 0x2244aa }); // dim blue
+  
+    for (const path of constellationLines) {
+      const vectors = [];
+      for (const pt of path) {
+        const hor = Astronomy.Horizon(time, observer, pt.ra, pt.dec, 'normal');
+        // include the point even if slightly below horizon so lines don't break oddly;
+        // skip only deeply-below ones
+        if (hor.altitude < -10) { vectors.length = 0; break; }
+        vectors.push(altAzToVector(hor.altitude, hor.azimuth));
+      }
+      if (vectors.length < 2) continue; // need at least 2 points for a line
+  
+      const geometry = new THREE.BufferGeometry().setFromPoints(vectors);
+      const line = new THREE.Line(geometry, material);
+      line.userData.isConstellation = true;  // tag so clearSky can remove it
+      scene.add(line);
+    }
+  }
+
   function plotBody(body, color, size, observer, time) {
     const equ = Astronomy.Equator(body, time, observer, true, true);
     const hor = Astronomy.Horizon(time, observer, equ.ra, equ.dec, 'normal');
@@ -170,6 +190,34 @@ async function loadStars() {
     console.log("loaded stars:", stars.length);
   }
 
+  let constellationLines = [];  // top-level, holds the line paths
+
+async function loadConstellations() {
+  const res = await fetch('constellations.lines.json');
+  const data = await res.json();
+
+  constellationLines = [];
+  for (const feature of data.features) {
+    const geom = feature.geometry;
+    // GeoJSON MultiLineString = array of line paths; LineString = single path
+    const paths = geom.type === 'MultiLineString'
+      ? geom.coordinates
+      : [geom.coordinates];
+
+    for (const path of paths) {
+      // each path is a list of [lon, lat] points
+      const points = path.map(([lon, lat]) => {
+        // convert their longitude back to RA in hours
+        const ra = lon < 0 ? (lon + 360) / 15 : lon / 15;
+        const dec = lat;
+        return { ra, dec };
+      });
+      constellationLines.push(points);
+    }
+  }
+  console.log("loaded constellation paths:", constellationLines.length);
+}
+
   function magToSize(mag) {
     // brightest stars big, faint ones tiny, exponential-ish falloff
     // mag -1.5 (Sirius) -> large, mag 4 -> very small
@@ -178,4 +226,5 @@ async function loadStars() {
   }
 
 loadStars();
+loadConstellations();
 startScene();   
