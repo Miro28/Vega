@@ -507,6 +507,56 @@ function toggleIdentify() {
   }
 }
 
+function startIntroStarfield() {
+  const canvas = document.getElementById('introStars');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+ 
+  let w, h, starList;
+  function resize() {
+    w = canvas.width = canvas.offsetWidth;
+    h = canvas.height = canvas.offsetHeight;
+  }
+  function seed() {
+    starList = [];
+    const count = Math.floor((w * h) / 9000); // density scales with screen
+    for (let i = 0; i < count; i++) {
+      starList.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        r: Math.random() * 1.4 + 0.3,
+        drift: Math.random() * 0.15 + 0.02,
+        tw: Math.random() * Math.PI * 2,          // twinkle phase
+        twSpeed: Math.random() * 0.02 + 0.005
+      });
+    }
+  }
+ 
+  resize();
+  seed();
+  window.addEventListener('resize', () => { resize(); seed(); });
+ 
+  function frame() {
+    // stop animating once the intro is hidden
+    const overlay = document.getElementById('introOverlay');
+    if (overlay && overlay.style.display === 'none') return;
+ 
+    ctx.clearRect(0, 0, w, h);
+    for (const s of starList) {
+      s.x -= s.drift;            // gentle leftward drift
+      if (s.x < -2) s.x = w + 2;
+      s.tw += s.twSpeed;
+      const alpha = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(s.tw)); // twinkle
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(220, 230, 255, ${alpha})`;
+      ctx.fill();
+    }
+    requestAnimationFrame(frame);
+  }
+  frame();
+}
+
 
 // ----- Wiring -----
 
@@ -514,6 +564,7 @@ document.getElementById('startAppBtn').addEventListener('click', initializeApp);
 document.getElementById('calBtn').addEventListener('click', () => calibrateOnBody(Astronomy.Body.Moon));
 document.getElementById('identifyBtn').addEventListener('click', toggleIdentify);
 
+startIntroStarfield();
 loadStars();
 loadConstellations();
 startScene();

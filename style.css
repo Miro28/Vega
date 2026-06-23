@@ -1,18 +1,21 @@
-/* VEGA - precision-instrument aesthetic
-   Midnight base, single amber accent, geometric sans, hairline detailing. */
+/* VEGA - wondrous two-tone night sky
+   Deep blue base, amber + starlight accents, a little glow and life. */
 
-   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
    :root {
-     --bg-deep: #060912;
-     --bg-panel: rgba(10, 16, 28, 0.72);
-     --line: rgba(180, 200, 235, 0.18);
-     --line-strong: rgba(180, 200, 235, 0.34);
-     --text: #e8ecf6;
-     --text-dim: #8a93a8;
-     --amber: #f2b25c;
-     --amber-soft: rgba(242, 178, 92, 0.14);
-     --target: #ff6b5e;
+     --bg-deep: #05080f;
+     --bg-blue: #0a1430;
+     --bg-panel: rgba(12, 22, 46, 0.66);
+     --line: rgba(150, 180, 255, 0.18);
+     --line-strong: rgba(150, 180, 255, 0.38);
+     --text: #eef2fb;
+     --text-dim: #93a0c4;
+     --amber: #ffc15e;
+     --amber-glow: rgba(255, 193, 94, 0.45);
+     --blue: #6fb4ff;
+     --blue-glow: rgba(111, 180, 255, 0.4);
+     --target: #ff8a6b;
      --font-ui: 'Space Grotesk', system-ui, sans-serif;
      --font-mono: 'IBM Plex Mono', monospace;
    }
@@ -32,66 +35,92 @@
      -webkit-user-select: none;
    }
    
-   canvas {
-     position: fixed;
-     inset: 0;
-     width: 100vw;
-     height: 100vh;
-     z-index: 2;
-   }
+   canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 2; }
    
-   /* Intro overlay */
+   /* Intro overlay with drifting starfield */
    #introOverlay {
      position: fixed;
      inset: 0;
      background:
-       radial-gradient(ellipse at 50% 30%, rgba(40, 55, 90, 0.35), transparent 60%),
-       var(--bg-deep);
+       radial-gradient(ellipse at 50% 35%, rgba(40, 70, 140, 0.45), transparent 65%),
+       radial-gradient(ellipse at 80% 80%, rgba(120, 80, 30, 0.18), transparent 55%),
+       linear-gradient(180deg, var(--bg-blue), var(--bg-deep));
      display: flex;
      justify-content: center;
      align-items: center;
      z-index: 50;
-     transition: opacity 0.6s ease;
+     transition: opacity 0.7s ease;
+     overflow: hidden;
    }
    
-   .intro-content { text-align: center; padding: 0 2rem; max-width: 420px; }
+   /* canvas the JS draws drifting stars onto */
+   #introStars {
+     position: absolute;
+     inset: 0;
+     width: 100%;
+     height: 100%;
+     z-index: 0;
+   }
+   
+   .intro-content {
+     position: relative;
+     z-index: 1;
+     text-align: center;
+     padding: 0 2rem;
+     max-width: 440px;
+   }
    
    .intro-content h1 {
-     font-size: clamp(3.2rem, 18vw, 5.5rem);
-     font-weight: 500;
-     letter-spacing: 0.18em;
-     margin: 0 0 0.4rem;
-     text-indent: 0.18em;
+     font-size: clamp(3.4rem, 19vw, 6rem);
+     font-weight: 700;
+     letter-spacing: 0.16em;
+     margin: 0 0 0.5rem;
+     text-indent: 0.16em;
      line-height: 1;
+     background: linear-gradient(180deg, #fff 0%, var(--amber) 120%);
+     -webkit-background-clip: text;
+     background-clip: text;
+     color: transparent;
+     text-shadow: 0 0 40px var(--amber-glow);
+     animation: titleGlow 4s ease-in-out infinite;
+   }
+   
+   @keyframes titleGlow {
+     0%, 100% { filter: drop-shadow(0 0 12px var(--amber-glow)); }
+     50% { filter: drop-shadow(0 0 26px var(--amber-glow)); }
    }
    
    .intro-content p {
      font-family: var(--font-mono);
      font-size: 0.82rem;
-     letter-spacing: 0.22em;
+     letter-spacing: 0.28em;
      text-transform: uppercase;
-     color: var(--text-dim);
+     color: var(--blue);
      margin: 0 0 3.5rem;
    }
    
    .primary-btn {
-     background: transparent;
-     border: 1px solid var(--line-strong);
-     color: var(--text);
-     padding: 16px 38px;
+     background: rgba(255, 193, 94, 0.06);
+     border: 1px solid var(--amber);
+     color: var(--amber);
+     padding: 16px 42px;
      font-family: var(--font-mono);
-     font-size: 0.8rem;
-     letter-spacing: 0.18em;
+     font-size: 0.82rem;
+     letter-spacing: 0.2em;
      text-transform: uppercase;
      cursor: pointer;
-     border-radius: 2px;
-     transition: border-color 0.25s ease, color 0.25s ease, background 0.25s ease;
+     border-radius: 3px;
+     box-shadow: 0 0 24px rgba(255, 193, 94, 0.12);
+     transition: background 0.3s ease, box-shadow 0.3s ease, transform 0.15s ease;
    }
    
-   .primary-btn:hover { border-color: var(--amber); color: var(--amber); }
-   .primary-btn:active { background: var(--amber-soft); }
+   .primary-btn:hover {
+     background: rgba(255, 193, 94, 0.14);
+     box-shadow: 0 0 36px var(--amber-glow);
+   }
+   .primary-btn:active { transform: scale(0.97); }
    
-   /* Main HUD */
+   /* HUD */
    #arUI { opacity: 1; transition: opacity 0.5s ease; }
    .hidden { opacity: 0 !important; pointer-events: none; }
    
@@ -105,68 +134,62 @@
    
    #arReadout {
      font-family: var(--font-mono);
-     font-size: 0.72rem;
+     font-size: 0.7rem;
      letter-spacing: 0.14em;
-     color: var(--text-dim);
+     color: var(--blue);
      background: var(--bg-panel);
      border: 1px solid var(--line);
-     border-radius: 2px;
+     border-radius: 3px;
      padding: 8px 12px;
-     backdrop-filter: blur(6px);
-     -webkit-backdrop-filter: blur(6px);
+     backdrop-filter: blur(8px);
+     -webkit-backdrop-filter: blur(8px);
    }
    
-   /* Center reticle */
+   /* Reticle with a soft pulse */
    #crosshair {
      position: fixed;
-     top: 50%;
-     left: 50%;
+     top: 50%; left: 50%;
      transform: translate(-50%, -50%);
      z-index: 11;
      pointer-events: none;
    }
    
    .reticle {
-     width: 46px;
-     height: 46px;
-     border: 1px solid rgba(255, 107, 94, 0.55);
+     width: 48px;
+     height: 48px;
+     border: 1px solid rgba(255, 138, 107, 0.6);
      border-radius: 50%;
      position: relative;
+     box-shadow: 0 0 14px rgba(255, 138, 107, 0.25);
+     animation: reticlePulse 2.4s ease-in-out infinite;
+   }
+   
+   @keyframes reticlePulse {
+     0%, 100% { box-shadow: 0 0 12px rgba(255, 138, 107, 0.2); }
+     50% { box-shadow: 0 0 20px rgba(255, 138, 107, 0.45); }
    }
    
    .reticle::before, .reticle::after {
      content: '';
      position: absolute;
-     background: rgba(255, 107, 94, 0.8);
+     background: rgba(255, 138, 107, 0.85);
    }
+   .reticle::before { top: 50%; left: 50%; width: 1px; height: 13px; transform: translate(-50%, -50%); }
+   .reticle::after  { top: 50%; left: 50%; width: 13px; height: 1px; transform: translate(-50%, -50%); }
    
-   .reticle::before {
-     top: 50%; left: 50%;
-     width: 1px; height: 12px;
-     transform: translate(-50%, -50%);
-   }
-   
-   .reticle::after {
-     top: 50%; left: 50%;
-     width: 12px; height: 1px;
-     transform: translate(-50%, -50%);
-   }
-   
-   /* Star name shown under the reticle when identify is on */
    #starLabel {
      position: absolute;
-     top: calc(50% + 34px);
+     top: calc(50% + 36px);
      left: 50%;
      transform: translateX(-50%);
      white-space: nowrap;
      font-family: var(--font-mono);
-     font-size: 0.8rem;
-     letter-spacing: 0.1em;
+     font-size: 0.85rem;
+     letter-spacing: 0.12em;
      color: var(--amber);
-     text-shadow: 0 0 8px rgba(0, 0, 0, 0.9);
+     text-shadow: 0 0 10px var(--amber-glow), 0 0 4px rgba(0,0,0,0.9);
    }
    
-   /* Bottom controls */
    #hudBottom {
      position: fixed;
      bottom: env(safe-area-inset-bottom, 28px);
@@ -182,8 +205,8 @@
      background: var(--bg-panel);
      border: 1px solid var(--line);
      color: var(--text);
-     padding: 13px 20px;
-     border-radius: 2px;
+     padding: 13px 22px;
+     border-radius: 3px;
      font-family: var(--font-mono);
      font-size: 0.72rem;
      letter-spacing: 0.12em;
@@ -192,16 +215,20 @@
      align-items: center;
      gap: 9px;
      cursor: pointer;
-     backdrop-filter: blur(6px);
-     -webkit-backdrop-filter: blur(6px);
-     transition: border-color 0.2s ease, color 0.2s ease;
+     backdrop-filter: blur(8px);
+     -webkit-backdrop-filter: blur(8px);
+     transition: border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
    }
    
    .hud-btn svg { color: var(--amber); }
    .hud-btn:hover { border-color: var(--line-strong); }
-   .hud-btn:active { color: var(--amber); border-color: var(--amber); }
-   .hud-btn.active { border-color: var(--amber); color: var(--amber); }
+   .hud-btn:active { transform: scale(0.97); }
+   .hud-btn.active {
+     border-color: var(--amber);
+     color: var(--amber);
+     box-shadow: 0 0 18px rgba(255, 193, 94, 0.2);
+   }
    
    @media (prefers-reduced-motion: reduce) {
-     * { transition: none !important; }
+     *, .intro-content h1, .reticle { animation: none !important; transition: none !important; }
    }
