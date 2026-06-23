@@ -16,19 +16,26 @@ let identifyOn = false;
 let headingOffset = 0;
 let rawAlpha = 0, rawBeta = 0, rawGamma = 0;
 
-let smoothAlpha = 0, smoothBeta = 0, smoothGamma = 0;
-let smoothingReady = false;
+let lastQuat = new THREE.Quaternion();
+let quatReady = false;
 
 const MAGNETIC_DECLINATION = 5; // degrees east, approx for Bulgaria
 const SKY_RADIUS = 1000;        // large so small camera motion gives no parallax
 
-const zee = new THREE.Vector3(0, 0, 1);
-const q0 = new THREE.Quaternion();
-const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
-const tmpEuler = new THREE.Euler();
-
 const tmpVec = new THREE.Vector3();
 const camDir = new THREE.Vector3();
+
+// Quaternion building blocks for the orientation math
+const deviceQuat = new THREE.Quaternion();
+const screenTransform = new THREE.Quaternion();
+const worldTransform = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -90 deg about X
+const zAxis = new THREE.Vector3(0, 0, 1);
+const qX = new THREE.Quaternion();
+const qY = new THREE.Quaternion();
+const qZ = new THREE.Quaternion();
+const xAxisV = new THREE.Vector3(1, 0, 0);
+const yAxisV = new THREE.Vector3(0, 1, 0);
+const zAxisV = new THREE.Vector3(0, 0, 1);
 
 const CONSTELLATION_NAMES = {
   And:'Andromeda', Ant:'Antlia', Aps:'Apus', Aqr:'Aquarius', Aql:'Aquila',
@@ -66,13 +73,6 @@ function altAzToVector(altitude, azimuth, radius = SKY_RADIUS) {
 function magToSize(mag) {
   const size = 7 * Math.pow(2.512, (1 - mag) * 0.18);
   return Math.max(2, Math.min(size, 26));
-}
-
-function lerpAngle(a, b, k) {
-  let diff = b - a;
-  while (diff > 180) diff -= 360;
-  while (diff < -180) diff += 360;
-  return a + diff * k;
 }
 
 
@@ -231,8 +231,6 @@ function plotBody(body, coreColor, haloColor, size, observer, time) {
   if (hor.altitude < 0) return;
 
   const pos = altAzToVector(hor.altitude, hor.azimuth);
-
-  // scale physical size up with the larger sky radius
   const coreSize = size * (SKY_RADIUS / 100);
 
   const core = new THREE.Mesh(
@@ -299,32 +297,32 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-// Orientation-only camera: rotates with the device, never translates, so the
-// distant sky shows no parallax when the phone is physically moved.
+// Build orientation as a product of single-axis quaternions (no setFromEuler,
+// so no gimbal-lock singularity / no sudden 360 spins). Smooth with slerp.
 function setCameraFromDevice() {
-  const k = 0.15;
-  if (!smoothingReady) {
-    smoothAlpha = rawAlpha;
-    smoothBeta = rawBeta;
-    smoothGamma = rawGamma;
-    smoothingReady = true;
+  const a = (rawAlpha - headingOffset) * Math.PI / 180;
+  const b = rawBeta * Math.PI / 180;
+  const g = rawGamma * Math.PI / 180;
+  const orient = (screen.orientation?.angle || 0) * Math.PI / 180;
+
+  qZ.setFromAxisAngle(zAxisV, a);
+  qX.setFromAxisAngle(xAxisV, b);
+  qY.setFromAxisAngle(yAxisV, g);
+
+  deviceQuat.copy(qZ).multiply(qX).multiply(qY);
+
+  screenTransform.setFromAxisAngle(zAxis, -orient);
+  deviceQuat.multiply(screenTransform);
+  deviceQuat.multiply(worldTransform);
+
+  if (!quatReady) {
+    lastQuat.copy(deviceQuat);
+    quatReady = true;
   } else {
-    smoothAlpha = lerpAngle(smoothAlpha, rawAlpha, k);
-    smoothBeta += (rawBeta - smoothBeta) * k;
-    smoothGamma += (rawGamma - smoothGamma) * k;
+    lastQuat.slerp(deviceQuat, 0.25);
   }
 
-  const deg2rad = Math.PI / 180;
-  const alpha = (smoothAlpha - headingOffset) * deg2rad;
-  const beta = smoothBeta * deg2rad;
-  const gamma = smoothGamma * deg2rad;
-  const orient = (screen.orientation?.angle || 0) * deg2rad;
-
-  tmpEuler.set(beta, alpha, -gamma, 'YXZ');
-  camera.quaternion.setFromEuler(tmpEuler);
-  camera.quaternion.multiply(q1);
-  camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient));
-
+  camera.quaternion.copy(lastQuat);
   camera.position.set(0, 0, 0);
 }
 
