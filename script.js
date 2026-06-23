@@ -6,8 +6,6 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 let scene, camera, renderer, controls;
 let stars = [];
-let smoothAlpha = 0, smoothBeta = 0, smoothGamma = 0;
-let smoothingReady = false;
 let starPoints = null;
 let plottedStars = [];          // { name, position } for identification
 let constellationGroups = [];   // { id, name, paths, lines }
@@ -18,7 +16,11 @@ let identifyOn = false;
 let headingOffset = 0;
 let rawAlpha = 0, rawBeta = 0, rawGamma = 0;
 
+let smoothAlpha = 0, smoothBeta = 0, smoothGamma = 0;
+let smoothingReady = false;
+
 const MAGNETIC_DECLINATION = 5; // degrees east, approx for Bulgaria
+const SKY_RADIUS = 1000;        // large so small camera motion gives no parallax
 
 const zee = new THREE.Vector3(0, 0, 1);
 const q0 = new THREE.Quaternion();
@@ -52,7 +54,7 @@ const CONSTELLATION_NAMES = {
 
 // ----- Coordinate conversion -----
 
-function altAzToVector(altitude, azimuth, radius = 100) {
+function altAzToVector(altitude, azimuth, radius = SKY_RADIUS) {
   const altRad = altitude * Math.PI / 180;
   const azRad = azimuth * Math.PI / 180;
   const x = radius * Math.cos(altRad) * Math.sin(azRad);
@@ -64,6 +66,13 @@ function altAzToVector(altitude, azimuth, radius = 100) {
 function magToSize(mag) {
   const size = 7 * Math.pow(2.512, (1 - mag) * 0.18);
   return Math.max(2, Math.min(size, 26));
+}
+
+function lerpAngle(a, b, k) {
+  let diff = b - a;
+  while (diff > 180) diff -= 360;
+  while (diff < -180) diff += 360;
+  return a + diff * k;
 }
 
 
@@ -223,8 +232,11 @@ function plotBody(body, coreColor, haloColor, size, observer, time) {
 
   const pos = altAzToVector(hor.altitude, hor.azimuth);
 
+  // scale physical size up with the larger sky radius
+  const coreSize = size * (SKY_RADIUS / 100);
+
   const core = new THREE.Mesh(
-    new THREE.SphereGeometry(size, 32, 32),
+    new THREE.SphereGeometry(coreSize, 32, 32),
     new THREE.MeshBasicMaterial({ color: coreColor })
   );
   core.position.copy(pos);
@@ -237,7 +249,7 @@ function plotBody(body, coreColor, haloColor, size, observer, time) {
     blending: THREE.AdditiveBlending,
     depthWrite: false
   }));
-  halo.scale.setScalar(size * 5);
+  halo.scale.setScalar(coreSize * 5);
   halo.position.copy(pos);
   scene.add(halo);
 }
@@ -255,7 +267,7 @@ function renderSky(observer, time) {
 
 function startScene() {
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
 
   renderer = new THREE.WebGLRenderer({ alpha: true });
   renderer.setClearColor(0x000000, 0);
@@ -264,8 +276,8 @@ function startScene() {
   document.body.appendChild(renderer.domElement);
 
   controls = new OrbitControls(camera, renderer.domElement);
-  camera.position.set(0, 0, 0.1);
-  controls.target.set(0, 0, 0);
+  camera.position.set(0, 0, 0);
+  controls.target.set(0, 0, -1);
   controls.rotateSpeed = -0.3;
 
   window.addEventListener('resize', () => {
@@ -287,10 +299,10 @@ function animate() {
   renderer.render(scene, camera);
 }
 
+// Orientation-only camera: rotates with the device, never translates, so the
+// distant sky shows no parallax when the phone is physically moved.
 function setCameraFromDevice() {
-  // smoothing factor: lower = smoother but laggier, higher = snappier but jitterier
-  const k = 0.20;
-
+  const k = 0.15;
   if (!smoothingReady) {
     smoothAlpha = rawAlpha;
     smoothBeta = rawBeta;
@@ -298,8 +310,8 @@ function setCameraFromDevice() {
     smoothingReady = true;
   } else {
     smoothAlpha = lerpAngle(smoothAlpha, rawAlpha, k);
-    smoothBeta = smoothBeta + (rawBeta - smoothBeta) * k;
-    smoothGamma = smoothGamma + (rawGamma - smoothGamma) * k;
+    smoothBeta += (rawBeta - smoothBeta) * k;
+    smoothGamma += (rawGamma - smoothGamma) * k;
   }
 
   const deg2rad = Math.PI / 180;
@@ -312,14 +324,10 @@ function setCameraFromDevice() {
   camera.quaternion.setFromEuler(tmpEuler);
   camera.quaternion.multiply(q1);
   camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient));
+
+  camera.position.set(0, 0, 0);
 }
 
-function lerpAngle(a, b, k) {
-  let diff = b - a;
-  while (diff > 180) diff -= 360;
-  while (diff < -180) diff += 360;
-  return a + diff * k;
-}
 
 // ----- Identification -----
 
@@ -327,7 +335,6 @@ function updateIdentification() {
   const label = document.getElementById('starLabel');
   camera.getWorldDirection(camDir);
 
-  // nearest named star to the reticle
   let bestStar = null, bestStarDot = 0.9995;
   for (const s of plottedStars) {
     tmpVec.copy(s.position).normalize();
@@ -335,7 +342,6 @@ function updateIdentification() {
     if (dot > bestStarDot) { bestStarDot = dot; bestStar = s; }
   }
 
-  // nearest constellation: dim all, find closest line vertex, brighten its group
   let bestGroup = null, bestGroupDot = 0.999;
   for (const group of constellationGroups) {
     for (const line of group.lines) {
@@ -446,7 +452,6 @@ function onOrientation(event) {
   rawBeta = event.beta;
   rawGamma = event.gamma;
   arActive = true;
-  controls.enabled = false;
 }
 
 
