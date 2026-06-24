@@ -289,18 +289,51 @@ function plotBody(body, coreColor, haloColor, size, observer, time, name) {
   scene.add(halo);
 }
 
+// Planets are point sources to the eye — no visible disk. Render them like
+// bright stars: a glow sprite sized by the planet's real apparent magnitude,
+// so Venus (very bright) reads larger than Mercury, matching naked-eye reality.
+function plotPlanet(body, color, observer, time, name) {
+  const equ = Astronomy.Equator(body, time, observer, true, true);
+  const hor = Astronomy.Horizon(time, observer, equ.ra, equ.dec, 'normal');
+  if (hor.altitude < 0) return;
+
+  const pos = altAzToVector(hor.altitude, hor.azimuth);
+  if (name) plottedBodies.push({ name, position: pos.clone() });
+
+  // Real apparent magnitude drives apparent size, same scale as the stars.
+  let mag = 0;
+  try { mag = Astronomy.Illumination(body, time).mag; } catch (e) { mag = 1; }
+
+  // magToSize returns a screen-pixel size; sprites are world-scaled, so map
+  // that pixel size to a small world scale at SKY_RADIUS. A bright planet
+  // lands a touch larger than the brightest stars, never a big disk.
+  const px = magToSize(mag);                 // ~2..26 px range used for stars
+  const worldScale = (px / 100) * (SKY_RADIUS / 100) * 6;
+
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTexture,
+    color,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  }));
+  sprite.scale.setScalar(worldScale);
+  sprite.position.copy(pos);
+  scene.add(sprite);
+}
+
 function renderSky(observer, time) {
   clearSky();
   plotStars(observer, time);
   drawConstellations(observer, time);
   plotBody(Astronomy.Body.Sun, 0xfff2cc, 0xffcc55, 5, observer, time, 'Sun');
   plotBody(Astronomy.Body.Moon, 0xd8d8e0, 0x8899bb, 4, observer, time, 'Moon');
-  // Naked-eye planets. Smaller than Sun/Moon; tinted roughly to their real hue.
-  plotBody(Astronomy.Body.Mercury, 0xc9b89a, 0xa89878, 1.4, observer, time, 'Mercury');
-  plotBody(Astronomy.Body.Venus,   0xfff4d6, 0xffe9a8, 2.2, observer, time, 'Venus');
-  plotBody(Astronomy.Body.Mars,    0xff6b4a, 0xd14a2e, 1.6, observer, time, 'Mars');
-  plotBody(Astronomy.Body.Jupiter, 0xf5e6c8, 0xd8c49a, 2.4, observer, time, 'Jupiter');
-  plotBody(Astronomy.Body.Saturn,  0xf0dba0, 0xcbb070, 2.0, observer, time, 'Saturn');
+  // Naked-eye planets render as bright points sized by real magnitude.
+  plotPlanet(Astronomy.Body.Mercury, 0xc9b89a, observer, time, 'Mercury');
+  plotPlanet(Astronomy.Body.Venus,   0xfff4d6, observer, time, 'Venus');
+  plotPlanet(Astronomy.Body.Mars,    0xff7a55, observer, time, 'Mars');
+  plotPlanet(Astronomy.Body.Jupiter, 0xf5e6c8, observer, time, 'Jupiter');
+  plotPlanet(Astronomy.Body.Saturn,  0xf0dba0, observer, time, 'Saturn');
 }
 
 
@@ -656,11 +689,23 @@ function toggleLines() {
 }
 
 // Fullscreen, triggered manually after permission prompts have settled.
+// Tries standard then vendor-prefixed APIs (some Android browsers need these).
 function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen?.().catch(() => {});
+  const el = document.documentElement;
+  const fsElement = document.fullscreenElement || document.webkitFullscreenElement;
+
+  if (!fsElement) {
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen;
+    if (req) {
+      Promise.resolve(req.call(el)).catch(err => {
+        alert('Fullscreen unavailable: ' + (err?.message || err));
+      });
+    } else {
+      alert('Fullscreen is not supported by this browser.');
+    }
   } else {
-    document.exitFullscreen?.();
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) exit.call(document);
   }
 }
 
