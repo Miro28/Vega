@@ -15,7 +15,6 @@ let smoothedQuat = new THREE.Quaternion();
 let smoothReady = false;
 
 let arActive = false;
-let skyFrozen = false;
 let identifyOn = false;
 let headingOffset = 0;
 let rawAlpha = 0, rawBeta = 0, rawGamma = 0;
@@ -25,6 +24,29 @@ let smoothingReady = false;
 
 const MAGNETIC_DECLINATION = 5; // degrees east, approx for Bulgaria
 const SKY_RADIUS = 1000;        // large so small camera motion gives no parallax
+
+// Typical modern phone main camera spans ~67° across its WIDE (long) axis.
+// We map that onto the longer screen dimension and derive the vertical FOV
+// Three.js needs from the live aspect ratio. Device-independent, no tuning.
+const SENSOR_FOV_DEG = 67;
+
+// Returns the vertical FOV (deg) for a THREE.PerspectiveCamera so the rendered
+// sky matches the real camera feed at the current window size/orientation.
+function computeVerticalFov() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const longSide = Math.max(w, h);
+  const shortSide = Math.min(w, h);
+  // SENSOR_FOV_DEG spans the long axis; convert to the long-axis half-angle.
+  const longHalf = (SENSOR_FOV_DEG * Math.PI / 180) / 2;
+  if (h >= w) {
+    // Portrait: long axis is vertical → SENSOR_FOV_DEG is the vertical FOV.
+    return SENSOR_FOV_DEG;
+  }
+  // Landscape: long axis is horizontal → convert horizontal FOV to vertical.
+  const vHalf = Math.atan(Math.tan(longHalf) * (shortSide / longSide));
+  return vHalf * 2 * 180 / Math.PI;
+}
 
 const zee = new THREE.Vector3(0, 0, 1);
 const q0 = new THREE.Quaternion();
@@ -271,7 +293,7 @@ function renderSky(observer, time) {
 
 function startScene() {
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
+  camera = new THREE.PerspectiveCamera(computeVerticalFov(), window.innerWidth / window.innerHeight, 0.1, 5000);
 
   renderer = new THREE.WebGLRenderer({ alpha: true });
   renderer.setClearColor(0x000000, 0);
@@ -286,6 +308,7 @@ function startScene() {
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
+    camera.fov = computeVerticalFov();
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
@@ -295,13 +318,8 @@ function startScene() {
 
 function animate() {
   requestAnimationFrame(animate);
-  if (skyFrozen) {
-    // hold the camera dead still; feed + reticle (DOM) keep moving
-  } else if (arActive) {
-    setCameraFromDevice();
-  } else {
-    controls.update();
-  }
+  if (arActive) setCameraFromDevice();
+  else controls.update();
 
   if (identifyOn) updateIdentification();
 
@@ -561,19 +579,18 @@ document.getElementById('startAppBtn').addEventListener('click', initializeApp);
 document.getElementById('calBtn').addEventListener('click', () => calibrateOnBody(Astronomy.Body.Moon));
 document.getElementById('identifyBtn').addEventListener('click', toggleIdentify);
 
+// Show a blocking overlay whenever the device is in landscape; hide in portrait.
+function updateOrientationNotice() {
+  const notice = document.getElementById('landscapeNotice');
+  if (!notice) return;
+  const landscape = window.innerWidth > window.innerHeight;
+  notice.classList.toggle('hidden', !landscape);
+}
+window.addEventListener('resize', updateOrientationNotice);
+window.addEventListener('orientationchange', updateOrientationNotice);
+updateOrientationNotice();
+
 startIntroStarfield();
 loadStars();
 loadConstellations();
 startScene();
-
-// Double-tap anywhere to freeze/unfreeze the 3D sky (debug aid).
-// When frozen, the camera holds still while the video feed + reticle keep moving.
-let lastTap = 0;
-window.addEventListener('touchend', () => {
-  const now = Date.now();
-  if (now - lastTap < 300) {
-    skyFrozen = !skyFrozen;
-    console.log('skyFrozen:', skyFrozen);
-  }
-  lastTap = now;
-});

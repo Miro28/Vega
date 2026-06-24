@@ -220,3 +220,47 @@
    @media (prefers-reduced-motion: reduce) {
      *, .intro-content h1, .reticle { animation: none !important; transition: none !important; }
    }
+/* ---- Portrait hint on intro ---- */
+.portrait-hint {
+  margin-top: 18px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  opacity: 0.8;
+}
+
+/* ---- Landscape notice overlay ---- */
+#landscapeNotice {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, var(--bg-blue), var(--bg-deep));
+  color: var(--text);
+  text-align: center;
+  transition: opacity 0.25s ease;
+}
+#landscapeNotice.hidden {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+.landscape-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: var(--amber);
+}
+.landscape-inner svg {
+  transform: rotate(90deg);
+  filter: drop-shadow(0 0 8px var(--amber-glow));
+}
+.landscape-inner p {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+  color: var(--text);
+}
