@@ -311,18 +311,22 @@ function setCameraFromDevice() {
   const gamma = rawGamma * deg2rad;
   const orient = (screen.orientation?.angle || 0) * deg2rad;
 
-  tmpEuler.set(beta, alpha, -gamma, 'YXZ');
-  camera.quaternion.setFromEuler(tmpEuler);
-  camera.quaternion.multiply(q1);
-  camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient));
+  // Correct mapping: negate ALL angles, order 'YXZ'
+  const euler = new THREE.Euler(-beta, -alpha, -gamma, 'YXZ');
+  camera.quaternion.setFromEuler(euler);
 
-  // smooth jitter by blending toward the new orientation (slerp avoids flips)
+  // Screen orientation compensation (rotate around Z)
+  const qScreen = new THREE.Quaternion()
+      .setFromAxisAngle(new THREE.Vector3(0, 0, 1), -orient);
+  camera.quaternion.multiply(qScreen);
+
+  // Smoothing (keep your existing logic)
   if (!smoothReady) {
-    smoothedQuat.copy(camera.quaternion);
-    smoothReady = true;
+      smoothedQuat.copy(camera.quaternion);
+      smoothReady = true;
   } else {
-    smoothedQuat.slerp(camera.quaternion, 0.85);
-    camera.quaternion.copy(smoothedQuat);
+      smoothedQuat.slerp(camera.quaternion, 0.85);  // adjust as you like
+      camera.quaternion.copy(smoothedQuat);
   }
 
   camera.position.set(0, 0, 0);
