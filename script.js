@@ -35,6 +35,17 @@ const SKY_RADIUS = 1000;        // large so small camera motion gives no paralla
 // Three.js needs from the live aspect ratio. Device-independent, no tuning.
 const SENSOR_FOV_DEG = 67;
 
+// Naked-eye planets. Rendered as points (same as stars); color marks them out.
+// rgb values are 0..1 for the point shader. Tints chosen to be recognizable
+// without being cartoonish: Mars reddish, Saturn gold, Venus/Jupiter warm white.
+const PLANETS = [
+  { name: 'Mercury', body: () => Astronomy.Body.Mercury, rgb: [0.86, 0.80, 0.66] },
+  { name: 'Venus',   body: () => Astronomy.Body.Venus,   rgb: [1.00, 0.96, 0.82] },
+  { name: 'Mars',    body: () => Astronomy.Body.Mars,    rgb: [1.00, 0.55, 0.40] },
+  { name: 'Jupiter', body: () => Astronomy.Body.Jupiter, rgb: [1.00, 0.93, 0.78] },
+  { name: 'Saturn',  body: () => Astronomy.Body.Saturn,  rgb: [0.96, 0.86, 0.58] }
+];
+
 // Returns the vertical FOV (deg) for a THREE.PerspectiveCamera so the rendered
 // sky matches the real camera feed at the current window size/orientation.
 function computeVerticalFov() {
@@ -188,6 +199,7 @@ function plotStars(observer, time) {
   const positions = [];
   const sizes = [];
   const opacities = [];
+  const colors = [];
   plottedStars = [];
 
   for (const star of stars) {
@@ -198,14 +210,37 @@ function plotStars(observer, time) {
     positions.push(pos.x, pos.y, pos.z);
     sizes.push(magToSize(star.mag));
     opacities.push(Math.max(0.35, Math.min(1, 1.1 - star.mag * 0.12)));
+    colors.push(1, 1, 1); // stars render white
 
     if (star.name) plottedStars.push({ name: star.name, position: pos.clone() });
+  }
+
+  // Planets ride in the SAME point system → guaranteed identical sizing to a
+  // star of equal magnitude. They're points to the naked eye; only the color
+  // marks them as planets.
+  for (const p of PLANETS) {
+    const body = p.body();
+    const equ = Astronomy.Equator(body, time, observer, true, true);
+    const hor = Astronomy.Horizon(time, observer, equ.ra, equ.dec, 'normal');
+    if (hor.altitude < 0) continue;
+
+    let mag = 1;
+    try { mag = Astronomy.Illumination(body, time).mag; } catch (e) {}
+
+    const pos = altAzToVector(hor.altitude, hor.azimuth);
+    positions.push(pos.x, pos.y, pos.z);
+    sizes.push(magToSize(mag));
+    opacities.push(1);
+    colors.push(p.rgb[0], p.rgb[1], p.rgb[2]);
+
+    plottedBodies.push({ name: p.name, position: pos.clone() });
   }
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
   geometry.setAttribute('alpha', new THREE.Float32BufferAttribute(opacities, 1));
+  geometry.setAttribute('pcolor', new THREE.Float32BufferAttribute(colors, 3));
 
   const material = new THREE.ShaderMaterial({
     uniforms: { glow: { value: glowTexture } },
@@ -215,9 +250,12 @@ function plotStars(observer, time) {
     vertexShader: `
       attribute float size;
       attribute float alpha;
+      attribute vec3 pcolor;
       varying float vAlpha;
+      varying vec3 vColor;
       void main() {
         vAlpha = alpha;
+        vColor = pcolor;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
         gl_PointSize = size;
         gl_Position = projectionMatrix * mvPosition;
@@ -226,9 +264,10 @@ function plotStars(observer, time) {
     fragmentShader: `
       uniform sampler2D glow;
       varying float vAlpha;
+      varying vec3 vColor;
       void main() {
         vec4 tex = texture2D(glow, gl_PointCoord);
-        gl_FragColor = vec4(tex.rgb, tex.a * vAlpha);
+        gl_FragColor = vec4(tex.rgb * vColor, tex.a * vAlpha);
       }
     `
   });
@@ -289,38 +328,7 @@ function plotBody(body, coreColor, haloColor, size, observer, time, name) {
   scene.add(halo);
 }
 
-// Planets are point sources to the eye — no visible disk. Render them like
-// bright stars: a glow sprite sized by the planet's real apparent magnitude,
-// so Venus (very bright) reads larger than Mercury, matching naked-eye reality.
-function plotPlanet(body, color, observer, time, name) {
-  const equ = Astronomy.Equator(body, time, observer, true, true);
-  const hor = Astronomy.Horizon(time, observer, equ.ra, equ.dec, 'normal');
-  if (hor.altitude < 0) return;
-
-  const pos = altAzToVector(hor.altitude, hor.azimuth);
-  if (name) plottedBodies.push({ name, position: pos.clone() });
-
-  // Real apparent magnitude drives apparent size, same scale as the stars.
-  let mag = 0;
-  try { mag = Astronomy.Illumination(body, time).mag; } catch (e) { mag = 1; }
-
-  // magToSize returns a screen-pixel size; sprites are world-scaled, so map
-  // that pixel size to a small world scale at SKY_RADIUS. A bright planet
-  // lands a touch larger than the brightest stars, never a big disk.
-  const px = magToSize(mag);                 // ~2..26 px range used for stars
-  const worldScale = (px / 100) * (SKY_RADIUS / 100) * 6;
-
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: glowTexture,
-    color,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-  }));
-  sprite.scale.setScalar(worldScale);
-  sprite.position.copy(pos);
-  scene.add(sprite);
-}
+// Planets are rendered inside plotStars (same point system, colored).
 
 function renderSky(observer, time) {
   clearSky();
@@ -328,12 +336,6 @@ function renderSky(observer, time) {
   drawConstellations(observer, time);
   plotBody(Astronomy.Body.Sun, 0xfff2cc, 0xffcc55, 5, observer, time, 'Sun');
   plotBody(Astronomy.Body.Moon, 0xd8d8e0, 0x8899bb, 4, observer, time, 'Moon');
-  // Naked-eye planets render as bright points sized by real magnitude.
-  plotPlanet(Astronomy.Body.Mercury, 0xc9b89a, observer, time, 'Mercury');
-  plotPlanet(Astronomy.Body.Venus,   0xfff4d6, observer, time, 'Venus');
-  plotPlanet(Astronomy.Body.Mars,    0xff7a55, observer, time, 'Mars');
-  plotPlanet(Astronomy.Body.Jupiter, 0xf5e6c8, observer, time, 'Jupiter');
-  plotPlanet(Astronomy.Body.Saturn,  0xf0dba0, observer, time, 'Saturn');
 }
 
 
@@ -688,24 +690,45 @@ function toggleLines() {
   if (btn) btn.classList.toggle('active', linesVisible);
 }
 
-// Fullscreen, triggered manually after permission prompts have settled.
-// Tries standard then vendor-prefixed APIs (some Android browsers need these).
+// Fullscreen with diagnostics. The alert text tells us exactly what the
+// browser does, so we can pinpoint why it's not engaging on this device.
 function toggleFullscreen() {
   const el = document.documentElement;
   const fsElement = document.fullscreenElement || document.webkitFullscreenElement;
+  const hasStd = !!el.requestFullscreen;
+  const hasWebkit = !!(el.webkitRequestFullscreen || el.webkitRequestFullScreen);
 
-  if (!fsElement) {
-    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen;
-    if (req) {
-      Promise.resolve(req.call(el)).catch(err => {
-        alert('Fullscreen unavailable: ' + (err?.message || err));
-      });
-    } else {
-      alert('Fullscreen is not supported by this browser.');
-    }
-  } else {
+  if (fsElement) {
     const exit = document.exitFullscreen || document.webkitExitFullscreen;
     if (exit) exit.call(document);
+    return;
+  }
+
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen;
+  if (!req) {
+    alert(`No fullscreen API. std:${hasStd} webkit:${hasWebkit}`);
+    return;
+  }
+
+  try {
+    const result = req.call(el);
+    if (result && typeof result.then === 'function') {
+      result
+        .then(() => {
+          // Check whether it actually engaged.
+          const now = document.fullscreenElement || document.webkitFullscreenElement;
+          if (!now) alert('Request resolved but not in fullscreen (browser blocked it).');
+        })
+        .catch(err => alert('Fullscreen rejected: ' + (err?.name || '') + ' ' + (err?.message || err)));
+    } else {
+      // Older API returns nothing; check shortly after.
+      setTimeout(() => {
+        const now = document.fullscreenElement || document.webkitFullscreenElement;
+        if (!now) alert('No-promise fullscreen call did nothing (likely unsupported on this browser).');
+      }, 300);
+    }
+  } catch (err) {
+    alert('Fullscreen threw: ' + (err?.name || '') + ' ' + (err?.message || err));
   }
 }
 
